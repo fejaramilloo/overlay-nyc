@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overlay Restream · Negocio Y Construcción</title>
+
+<!-- Tipografía Inter (Restream renderiza en sus servidores: la fuente debe cargarse desde la web) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&display=swap">
+
+<style>
+  /* =====================================================================
+     OVERLAY V2 · OPTIMIZADO PARA COMPRESIÓN DE STREAMING
+     Los números están en PÍXELES A 1920 × 1080 y se escalan solos.
+
+     POSICIÓN DEL BANNER: se cambia en la etiqueta <body> más abajo
+       class="posicion-arriba"  o  class="posicion-abajo"
+     ===================================================================== */
+  :root {
+    /* Banner */
+    --banner-width: 1766;          /* ancho total (≈ 92% de 1920)               */
+    --banner-height: 150;          /* altura                                     */
+    --banner-margin: 54;           /* distancia al borde (arriba o abajo)        */
+    --brand-width: auto;           /* auto = se ajusta al texto; o un %, ej. 36% */
+
+    /* Ticker */
+    --ticker-speed: 90;            /* píxeles por segundo (90 = 3 px por cuadro a 30 fps; usar múltiplos de 30) */
+    --item-spacing: 52;            /* aire a cada lado de cada red               */
+    --dot-size: 12;                /* punto separador entre redes                */
+
+    /* Logos */
+    --logo-size: 100;              /* altura del isotipo                         */
+    --social-icon-size: 64;        /* círculo blanco de cada red                 */
+
+    /* Textos */
+    --title-size: 32;              /* NEGOCIO Y CONSTRUCCIÓN                     */
+    --subtitle-size: 20;           /* REVISTA + RADIO                            */
+    --social-text-size: 40;        /* usuarios de redes                          */
+
+    /* Colores (todos sólidos: la transparencia empeora la compresión) */
+    --background-color: #E66400;   /* naranjo principal (ticker) */
+    --brand-background: #B34E00;   /* naranjo oscuro (zona marca) */
+    --brand-accent: #FFFFFF;       /* franja izquierda            */
+    --badge-color: #FFFFFF;        /* círculo detrás de cada red  */
+    --text-color: #FFFFFF;
+    --dot-color: #FFFFFF;
+
+    --font: "Inter", "Segoe UI", Roboto, Arial, Helvetica, sans-serif;
+
+    /* No editar: 1px de diseño a 1920 */
+    --u: calc(100vw / 1920);
+  }
+
+  /* ============ PÁGINA TRANSPARENTE ============ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: transparent !important;
+    overflow: hidden;
+  }
+
+  /* ============ BARRA ============ */
+  .nyc-overlay {
+    position: fixed;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    width: calc(var(--banner-width) * var(--u));
+    height: calc(var(--banner-height) * var(--u));
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    background: var(--background-color);
+    border-radius: calc(4 * var(--u));
+    font-family: var(--font);
+    color: var(--text-color);
+    line-height: 1.15;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .posicion-arriba .nyc-overlay { top: calc(var(--banner-margin) * var(--u)); }
+  .posicion-abajo  .nyc-overlay { bottom: calc(var(--banner-margin) * var(--u)); }
+
+  /* ============ MARCA (FIJA) ============ */
+  .nyc-brand {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 var(--brand-width);
+    display: flex;
+    align-items: center;
+    gap: calc(22 * var(--u));
+    padding: 0 calc(72 * var(--u)) 0 calc(24 * var(--u));
+    background: var(--brand-background);
+    box-shadow: inset calc(6 * var(--u)) 0 0 var(--brand-accent);
+    clip-path: polygon(0 0, 100% 0, calc(100% - 44 * var(--u)) 100%, 0 100%);
+  }
+
+  .nyc-logo {
+    display: block;
+    flex: 0 0 auto;
+    height: calc(var(--logo-size) * var(--u));
+    width: auto;
+    border-radius: calc(5 * var(--u));
+  }
+
+  .nyc-brand-text {
+    display: flex;
+    flex-direction: column;
+    white-space: nowrap;
+  }
+
+  .nyc-title {
+    font-size: calc(var(--title-size) * var(--u));
+    font-weight: 800;
+    letter-spacing: 0.01em;
+  }
+
+  .nyc-subtitle {
+    margin-top: 0.35em;
+    font-size: calc(var(--subtitle-size) * var(--u));
+    font-weight: 700;
+    letter-spacing: 0.12em;
+  }
+
+  /* ============ TICKER ============ */
+  .nyc-ticker {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    contain: paint;
+  }
+
+  .nyc-track {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    width: max-content;
+    height: 100%;
+    will-change: transform;
+    backface-visibility: hidden;
+    /* 60s es solo respaldo: el script de abajo calcula la duración exacta según --ticker-speed */
+    animation: nyc-scroll 60s linear infinite;
+  }
+
+  .nyc-group {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  /* 2 grupos idénticos: mover -50% = exactamente 1 grupo → loop sin salto */
+  @keyframes nyc-scroll {
+    from { transform: translate3d(0, 0, 0); }
+    to   { transform: translate3d(-50%, 0, 0); }
+  }
+
+  /* ============ REDES ============ */
+  .nyc-item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45em;
+    padding: 0 calc(var(--item-spacing) * var(--u));
+    font-size: calc(var(--social-text-size) * var(--u));
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--text-color);
+    text-decoration: none;
+    outline: none;
+  }
+  .nyc-item:hover, .nyc-item:focus, .nyc-item:active, .nyc-item:visited {
+    color: var(--text-color);
+    text-decoration: none;
+  }
+
+  /* Punto separador (más estable que una línea de 1 px al comprimir) */
+  .nyc-item::after {
+    content: "";
+    position: absolute;
+    right: calc(var(--dot-size) * -0.5 * var(--u));
+    top: 50%;
+    width: calc(var(--dot-size) * var(--u));
+    height: calc(var(--dot-size) * var(--u));
+    border-radius: 50%;
+    transform: translateY(-50%);
+    background: var(--dot-color);
+  }
+
+  /* Círculo blanco: mantiene visibles todos los logos sobre el naranjo */
+  .nyc-badge {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--social-icon-size) * var(--u));
+    height: calc(var(--social-icon-size) * var(--u));
+    border-radius: 50%;
+    background: var(--badge-color);
+  }
+
+  .nyc-icon {
+    display: block;
+    width: 62%;
+    height: 62%;
+    overflow: visible;
+  }
+
+  .nyc-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+</style>
+</head>
+<!-- POSICIÓN: cambia "posicion-arriba" por "posicion-abajo" para bajar el banner -->
+<body class="posicion-arriba">
+
+<!-- Degradado del ícono de Instagram (definido una sola vez) -->
+<svg class="nyc-defs" aria-hidden="true" focusable="false">
+  <defs>
+    <radialGradient id="nyc-ig-gradient" cx="0.3" cy="1.07" r="1.5">
+      <stop offset="0" stop-color="#FDF497"/>
+      <stop offset="0.05" stop-color="#FDF497"/>
+      <stop offset="0.45" stop-color="#FD5949"/>
+      <stop offset="0.6" stop-color="#D6249F"/>
+      <stop offset="0.9" stop-color="#285AEB"/>
+    </radialGradient>
+  </defs>
+</svg>
+
+<div class="nyc-overlay">
+
+  <!-- ===== MARCA (FIJA) ===== -->
+  <div class="nyc-brand">
+    <!-- ISOTIPO incrustado (no necesita archivos externos) -->
+    <img class="nyc-logo" src="data:image/png;base64,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" alt="Negocio Y Construcción">
+    <div class="nyc-brand-text">
+      <div class="nyc-title">NEGOCIO Y CONSTRUCCIÓN</div>
+      <div class="nyc-subtitle">REVISTA + RADIO</div>
+    </div>
+  </div>
+
+  <!-- ===== TICKER ===== -->
+  <div class="nyc-ticker">
+    <div class="nyc-track">
+
+      <!-- GRUPO 1 -->
+      <div class="nyc-group">
+        <!-- LinkedIn -->
+        <a class="nyc-item" href="https://www.linkedin.com/company/negocioyconstruccion/posts/?feedView=all" target="_blank" rel="noopener noreferrer">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" fill="#FFFFFF"/><path fill="#0A66C2" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></span>
+          <span>Negocio Y Construcción</span>
+        </a>
+        <!-- X -->
+        <a class="nyc-item" href="https://x.com/negocioyconstr2" target="_blank" rel="noopener noreferrer">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="-1.5 -1.5 27 27" aria-hidden="true" focusable="false"><path fill="#000000" d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></span>
+          <span>@negocioyconstr2</span>
+        </a>
+        <!-- Facebook -->
+        <a class="nyc-item" href="https://web.facebook.com/RevistaNegocioyConstruccion" target="_blank" rel="noopener noreferrer">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12.1" r="11.2" fill="#FFFFFF"/><path fill="#0866FF" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></span>
+          <span>Revista Negocio Y Construcción</span>
+        </a>
+        <!-- Instagram -->
+        <a class="nyc-item" href="https://www.instagram.com/negocioyconstruccion/" target="_blank" rel="noopener noreferrer">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="24" height="24" rx="6" fill="url(#nyc-ig-gradient)"/><rect x="5" y="5" width="14" height="14" rx="4" fill="none" stroke="#FFFFFF" stroke-width="1.8"/><circle cx="12" cy="12" r="3.3" fill="none" stroke="#FFFFFF" stroke-width="1.8"/><circle cx="16.3" cy="7.7" r="1" fill="#FFFFFF"/></svg></span>
+          <span>@negocioyconstruccion</span>
+        </a>
+        <!-- YouTube -->
+        <a class="nyc-item" href="https://www.youtube.com/@negocioyconstruccion" target="_blank" rel="noopener noreferrer">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#FF0000" d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/><path fill="#FFFFFF" d="M9.545 15.568V8.432L15.818 12z"/></svg></span>
+          <span>@negocioyconstruccion</span>
+        </a>
+        <!-- TikTok -->
+        <a class="nyc-item" href="https://www.tiktok.com/@negocioyconstruccion" target="_blank" rel="noopener noreferrer">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="-1 -1 26 26" aria-hidden="true" focusable="false"><path fill="#25F4EE" transform="translate(-0.7 -0.7)" d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/><path fill="#FE2C55" transform="translate(0.7 0.7)" d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/><path fill="#000000" d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></span>
+          <span>@negocioyconstruccion</span>
+        </a>
+        <!-- Sitio web -->
+        <a class="nyc-item" href="https://radionegocioyconstruccion.com" target="_blank" rel="noopener noreferrer">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9.5" fill="none" stroke="#000000" stroke-width="2.2"/><ellipse cx="12" cy="12" rx="4.2" ry="9.5" fill="none" stroke="#000000" stroke-width="2.2"/><path d="M2.5 12h19" fill="none" stroke="#000000" stroke-width="2.2"/></svg></span>
+          <span>radionegocioyconstruccion.com</span>
+        </a>
+      </div>
+
+      <!-- GRUPO 2 (copia exacta para el loop infinito) -->
+      <div class="nyc-group" aria-hidden="true">
+        <!-- LinkedIn -->
+        <a class="nyc-item" href="https://www.linkedin.com/company/negocioyconstruccion/posts/?feedView=all" target="_blank" rel="noopener noreferrer" tabindex="-1">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="2.5" width="19" height="19" fill="#FFFFFF"/><path fill="#0A66C2" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></span>
+          <span>Negocio Y Construcción</span>
+        </a>
+        <!-- X -->
+        <a class="nyc-item" href="https://x.com/negocioyconstr2" target="_blank" rel="noopener noreferrer" tabindex="-1">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="-1.5 -1.5 27 27" aria-hidden="true" focusable="false"><path fill="#000000" d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></span>
+          <span>@negocioyconstr2</span>
+        </a>
+        <!-- Facebook -->
+        <a class="nyc-item" href="https://web.facebook.com/RevistaNegocioyConstruccion" target="_blank" rel="noopener noreferrer" tabindex="-1">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12.1" r="11.2" fill="#FFFFFF"/><path fill="#0866FF" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></span>
+          <span>Revista Negocio Y Construcción</span>
+        </a>
+        <!-- Instagram -->
+        <a class="nyc-item" href="https://www.instagram.com/negocioyconstruccion/" target="_blank" rel="noopener noreferrer" tabindex="-1">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="24" height="24" rx="6" fill="url(#nyc-ig-gradient)"/><rect x="5" y="5" width="14" height="14" rx="4" fill="none" stroke="#FFFFFF" stroke-width="1.8"/><circle cx="12" cy="12" r="3.3" fill="none" stroke="#FFFFFF" stroke-width="1.8"/><circle cx="16.3" cy="7.7" r="1" fill="#FFFFFF"/></svg></span>
+          <span>@negocioyconstruccion</span>
+        </a>
+        <!-- YouTube -->
+        <a class="nyc-item" href="https://www.youtube.com/@negocioyconstruccion" target="_blank" rel="noopener noreferrer" tabindex="-1">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#FF0000" d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/><path fill="#FFFFFF" d="M9.545 15.568V8.432L15.818 12z"/></svg></span>
+          <span>@negocioyconstruccion</span>
+        </a>
+        <!-- TikTok -->
+        <a class="nyc-item" href="https://www.tiktok.com/@negocioyconstruccion" target="_blank" rel="noopener noreferrer" tabindex="-1">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="-1 -1 26 26" aria-hidden="true" focusable="false"><path fill="#25F4EE" transform="translate(-0.7 -0.7)" d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/><path fill="#FE2C55" transform="translate(0.7 0.7)" d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/><path fill="#000000" d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></span>
+          <span>@negocioyconstruccion</span>
+        </a>
+        <!-- Sitio web -->
+        <a class="nyc-item" href="https://radionegocioyconstruccion.com" target="_blank" rel="noopener noreferrer" tabindex="-1">
+          <span class="nyc-badge"><svg class="nyc-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9.5" fill="none" stroke="#000000" stroke-width="2.2"/><ellipse cx="12" cy="12" rx="4.2" ry="9.5" fill="none" stroke="#000000" stroke-width="2.2"/><path d="M2.5 12h19" fill="none" stroke="#000000" stroke-width="2.2"/></svg></span>
+          <span>radionegocioyconstruccion.com</span>
+        </a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  /* Calcula una sola vez la duración del ciclo para que el ticker avance a
+     --ticker-speed píxeles por segundo. No corre en bucle: solo al cargar,
+     cuando termina de cargar la fuente y si cambia el tamaño de la ventana. */
+  (function () {
+    var track = document.querySelector('.nyc-track');
+    var group = document.querySelector('.nyc-group');
+    if (!track || !group) return;
+
+    function setDuration() {
+      var speed = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ticker-speed')) || 60;
+      var scale = window.innerWidth / 1920;
+      var width = group.getBoundingClientRect().width;
+      if (width > 0 && scale > 0) {
+        track.style.animationDuration = (width / (speed * scale)).toFixed(3) + 's';
+      }
+    }
+
+    setDuration();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(setDuration);
+    window.addEventListener('resize', setDuration);
+  })();
+</script>
+</body>
+</html>
